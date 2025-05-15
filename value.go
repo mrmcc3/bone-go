@@ -1,7 +1,5 @@
 package bone
 
-import "errors"
-
 type Value struct {
 	Code   byte
 	Level  int
@@ -9,8 +7,8 @@ type Value struct {
 	Values []*Value
 }
 
-func (v *Value) Scalar() bool {
-	return v.Code >= 0x08 && v.Code < 0xA0
+func (v *Value) Block() bool {
+	return v.Code >= 0x08 && v.Code < 0x90
 }
 
 func (v *Value) String() bool {
@@ -72,95 +70,4 @@ func (v *Value) Complete() bool {
 		return false
 	}
 	panic("illegal")
-}
-
-func (v *Value) Accept(b byte) error {
-	panic("todo 5")
-}
-
-type Decoder struct {
-	Values []*Value
-	Stack  []*Value
-	Level  int
-}
-
-func (d *Decoder) Collapse() {
-	for true {
-		l := len(d.Stack)
-		if l == 0 {
-			return // nothing on the stack
-		}
-		v := d.Stack[l-1] // peek
-		if !v.Complete() {
-			return // the value is not complete
-		}
-		d.Stack = d.Stack[:l-1] // pop
-		l = len(d.Stack)
-		if l == 0 {
-			d.Values = append(d.Values, v)
-			return // it's a top level value
-		}
-		d.Stack[l-1].Values = append(d.Stack[l-1].Values, v)
-	}
-}
-
-func (d *Decoder) StartValue(code byte) error {
-	if code < 0x08 || code == 0xFF {
-		return errors.New("illegal type code")
-	}
-	d.Stack = append(d.Stack, &Value{Code: code, Level: d.Level})
-	d.Level = 0
-	d.Collapse()
-	return nil
-}
-
-func (d *Decoder) Accept(b byte) error {
-	// TODO do string termination first
-	l := len(d.Stack)
-	if l > 0 {
-		v := d.Stack[l-1]
-		if v.Scalar() {
-			if err := v.Accept(b); err != nil {
-				return err
-			}
-			d.Collapse()
-			return nil
-		}
-		if b == 0x00 && v.List() {
-			d.Stack = d.Stack[:l-1]
-			l = len(d.Stack)
-			if l == 0 {
-				d.Values = append(d.Values, v)
-			} else {
-				d.Stack[l-1].Values = append(d.Stack[l-1].Values, v)
-			}
-			d.Collapse()
-			return nil
-		}
-	}
-	if b == 0xFF {
-		d.Level++
-		return nil
-	}
-	return d.StartValue(b)
-}
-
-func (d *Decoder) Done(b byte) error {
-	// required for terminating string
-	panic("TODO")
-}
-
-func (v *Value) Bool() (bool, error) {
-	if v.Code == 0x20 {
-		return false, nil
-	}
-	if v.Code == 0x21 {
-		return true, nil
-	}
-	return false, errors.New("not a bool")
-}
-
-// encode a bone value into bytes
-func (v *Value) Encode() []byte {
-	panic("todo")
 }
