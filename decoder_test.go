@@ -497,6 +497,105 @@ func TestDecodeList(t *testing.T) {
 }
 
 func TestDecodeNestedMix(t *testing.T) {
-	t.Skip("TODO test a mix of nested decoding methods.")
+	payload := []byte{
+		0xF0,
+		0x91, 0x00, 0x01, 0x00,
+		0xA1,
+		0xB1,
+		0xF1, 0x10, 0x00,
+		0xFF, 0xAF, 0xFF, 0x9F, 0xFF, 0x00,
+		0xFF, 0xFF, 0xFE, 0x00,
+		0x00,
+	}
 
+	expected := []*Value{
+		{
+			Code:  0xF0,
+			Level: 0,
+			Values: []*Value{
+				{Code: 0x91, Level: 0, Bytes: []byte{0x00}},
+				{
+					Code:  0xA1,
+					Level: 0,
+					Values: []*Value{
+						{Code: 0xB1, Level: 0, Values: []*Value{
+							{
+								Code:  0xF1,
+								Level: 0,
+								Values: []*Value{
+									{Code: 0x10, Level: 0},
+								},
+							},
+							{
+								Code:  0xAF,
+								Level: 1,
+								Values: []*Value{
+									{Code: 0x9F, Level: 1, Bytes: []byte{0xFF}},
+								},
+							},
+						}},
+					},
+				},
+				{Code: 0xFE, Level: 2, Values: []*Value{}},
+			},
+		},
+	}
+
+	values, err := Decode(payload)
+	if err != nil {
+		t.Fatalf("Failed to decode payload: %v", err)
+	}
+
+	if len(values) != len(expected) {
+		t.Fatalf("Expected %d values, got %d", len(expected), len(values))
+	}
+
+	// Helper function to compare nested values recursively
+	var compareValues func(t *testing.T, val, exp *Value, path string)
+	compareValues = func(t *testing.T, val, exp *Value, path string) {
+		if val.Code != exp.Code {
+			t.Errorf("%s: Expected type code 0x%02X, got 0x%02X", path, exp.Code, val.Code)
+		}
+
+		if val.Level != exp.Level {
+			t.Errorf("%s: Expected level %d, got %d", path, exp.Level, val.Level)
+		}
+
+		// Compare bytes
+		if len(val.Bytes) != len(exp.Bytes) {
+			t.Errorf("%s: Expected %d bytes, got %d bytes", path, len(exp.Bytes), len(val.Bytes))
+		} else if exp.Bytes != nil {
+			for k, b := range exp.Bytes {
+				if val.Bytes[k] != b {
+					t.Errorf("%s: Byte at index %d: expected 0x%02X, got 0x%02X", path, k, b, val.Bytes[k])
+				}
+			}
+		}
+
+		// Compare nested values
+		if len(val.Values) != len(exp.Values) {
+			t.Errorf("%s: Expected %d nested values, got %d", path, len(exp.Values), len(val.Values))
+			return
+		}
+
+		for j, expNested := range exp.Values {
+			if j >= len(val.Values) {
+				t.Errorf("%s: Missing nested value at index %d", path, j)
+				continue
+			}
+
+			nested := val.Values[j]
+			nestedPath := fmt.Sprintf("%s.Values[%d]", path, j)
+			compareValues(t, nested, expNested, nestedPath)
+		}
+	}
+
+	for i, exp := range expected {
+		if i >= len(values) {
+			t.Fatalf("Missing value at index %d", i)
+		}
+		val := values[i]
+		path := fmt.Sprintf("values[%d]", i)
+		compareValues(t, val, exp, path)
+	}
 }
