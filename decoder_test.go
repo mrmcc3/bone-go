@@ -44,6 +44,10 @@ func TestDecodeIllegal(t *testing.T) {
 				name:  "Multiple level extensions followed by illegal type code",
 				bytes: []byte{0xFF, 0xFF, 0x00},
 			},
+			{
+				name:  "Can't end list on non-zero level",
+				bytes: []byte{0xF1, 0xFF, 0x00},
+			},
 		}
 		for _, tc := range illegalExtensions {
 			t.Run(tc.name, func(t *testing.T) {

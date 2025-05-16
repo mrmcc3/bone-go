@@ -11,7 +11,7 @@ type Decoder struct {
 }
 
 func (d *Decoder) Collapse() {
-	for true {
+	for {
 		l := len(d.Stack)
 		if l == 0 {
 			return
@@ -28,19 +28,6 @@ func (d *Decoder) Collapse() {
 		}
 		d.Stack[l-1].Values = append(d.Stack[l-1].Values, v)
 	}
-}
-
-func (d *Decoder) StartValue(code byte) error {
-	if code < 0x08 || code == 0xFF {
-		return errors.New("illegal type code")
-	}
-	if code < 0x20 && d.Level > 0 {
-		return errors.New("illegal level extension")
-	}
-	d.Stack = append(d.Stack, &Value{Code: code, Level: d.Level})
-	d.Level = 0
-	d.Collapse()
-	return nil
 }
 
 func (d *Decoder) TerminateString(b byte) {
@@ -86,6 +73,9 @@ func (d *Decoder) Accept(b byte) error {
 			return nil
 		}
 		if b == 0x00 && v.List() {
+			if d.Level != 0 {
+				return errors.New("list terminated with non-zero level")
+			}
 			d.Stack = d.Stack[:l-1]
 			l--
 			if l == 0 {
@@ -101,11 +91,16 @@ func (d *Decoder) Accept(b byte) error {
 		d.Level++
 		return nil
 	}
-	return d.StartValue(b)
-}
-
-func (d *Decoder) Done() {
-	d.TerminateString(0xFF)
+	if b < 0x08 {
+		return errors.New("illegal type code")
+	}
+	if d.Level > 0 && b < 0x20 {
+		return errors.New("illegal level extension")
+	}
+	d.Stack = append(d.Stack, &Value{Code: b, Level: d.Level})
+	d.Level = 0
+	d.Collapse()
+	return nil
 }
 
 func Decode(bytes []byte) ([]*Value, error) {
@@ -115,6 +110,12 @@ func Decode(bytes []byte) ([]*Value, error) {
 			return decoder.Values, err
 		}
 	}
-	decoder.Done()
+	decoder.TerminateString(0xFF)
+	if len(decoder.Stack) != 0 {
+		return nil, errors.New("partial value left on stack")
+	}
+	if decoder.Level != 0 {
+		return nil, errors.New("non zero level")
+	}
 	return decoder.Values, nil
 }
