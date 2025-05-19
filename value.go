@@ -66,6 +66,8 @@ func (v *Value) Complete() bool {
 		return len(v.Values) == 3
 	case v.Code < 0xE0:
 		return len(v.Values) == 4
+	case v.Code < 0xF0:
+		return len(v.Values) == 5
 	case v.Code < 0xFF:
 		return false
 	}

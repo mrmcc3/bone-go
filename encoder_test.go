@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+func TestEncodeIllegal(t *testing.T) {
+	t.Skip("values that should cause the encoder to error")
+}
+
 func FuzzEncode(f *testing.F) {
 	for _, data := range DecodableSeedCorpus {
 		f.Add(data)
